@@ -29,15 +29,14 @@
 #define EPS_START 0.9f
 #define EPS_END 0.05f
 #define EPS_DECAY 200
-#define NUM_ACTIONS 4
 
 /*
-  / TODO - Tune the following hyperparameters
+  / Tune the following hyperparameters
   /
 */
 
-#define INPUT_WIDTH   512
-#define INPUT_HEIGHT  512
+#define INPUT_WIDTH   128
+#define INPUT_HEIGHT  128
 #define OPTIMIZER "RMSprop"
 #define LEARNING_RATE 0.01f
 #define REPLAY_MEMORY 10000
@@ -46,10 +45,10 @@
 #define LSTM_SIZE 32
 
 /*
-  / TODO - Define Reward Parameters
+  /  - Define Reward Parameters
   /
 */
-#define SMOOTH_REWARD_ALPHA 0.9f
+#define SMOOTH_REWARD_ALPHA 0.5f
 #define REWARD_WIN  1.0f
 #define REWARD_LOSS -1.0f
 
@@ -67,11 +66,12 @@
 #define ANIMATION_STEPS 1000
 
 // Set Debug Mode
-#define DEBUG true
+#define DEBUG false
 
 // Lock base rotation DOF (Add dof in header file if off)
 #define LOCKBASE true
 
+#define GRIPPER_CONTACT_ONLY true
 
 namespace gazebo
 {
@@ -135,7 +135,7 @@ namespace gazebo
     cameraNode->Init();
 	
     /*
-      / TODO - Subscribe to camera topic
+      /  - Subscribe to camera topic
       /
     */
     cameraSub = cameraNode->Subscribe("/gazebo/arm_world/camera/link/camera/image", &ArmPlugin::onCameraMsg, this);
@@ -144,7 +144,7 @@ namespace gazebo
     collisionNode->Init();
 		
     /*
-      / TODO - Subscribe to prop collision topic
+      /  - Subscribe to prop collision topic
       /
     */
     collisionSub = collisionNode->Subscribe("/gazebo/arm_world/tube/tube_link/my_contact", &ArmPlugin::onCollisionMsg, this);
@@ -162,10 +162,15 @@ namespace gazebo
 
 			
     /*
-      / TODO - Create DQN Agent
+      /  - Create DQN Agent
       /
     */
-    agent = dqnAgent::Create(INPUT_WIDTH, INPUT_HEIGHT, INPUT_CHANNELS, NUM_ACTIONS, 
+#ifdef LOCKBASE
+    int numActions = (DOF - 1) * 2;
+#else
+    int numActions = DOF * 2;
+#endif
+    agent = dqnAgent::Create(INPUT_WIDTH, INPUT_HEIGHT, INPUT_CHANNELS, numActions,
 			     OPTIMIZER, LEARNING_RATE, REPLAY_MEMORY, BATCH_SIZE, 
 			     GAMMA, EPS_START, EPS_END, EPS_DECAY, 
 			     USE_LSTM, LSTM_SIZE, ALLOW_RANDOM, DEBUG_DQN);
@@ -261,18 +266,20 @@ namespace gazebo
 
 	
 	/*
-	  / TODO - Check if there is collision between the arm and object, then issue learning reward
+	  /  - Check if there is collision between the arm and object, then issue learning reward
 	  /
 	*/
 	
 		
-	bool collisionCheck = strcmp(contacts->contact(i).collision1().c_str(), "left_gripper");
+	bool collisionCheck = strcmp(contacts->contact(i).collision1().c_str(), "gripper_link");
+#ifndef GRIPPER_CONTACT_ONLY
 	collisionCheck = collisionCheck || strcmp(contacts->contact(i).collision1().c_str(), "right_gripper");
 	collisionCheck = collisionCheck || strcmp(contacts->contact(i).collision1().c_str(), "middle_collision");
-	collisionCheck = collisionCheck || strcmp(contacts->contact(i).collision1().c_str(), "gripper_link");
+	collisionCheck = collisionCheck || strcmp(contacts->contact(i).collision1().c_str(), "left_gripper");
 	collisionCheck = collisionCheck || strcmp(contacts->contact(i).collision1().c_str(), "collision2");
-	//collisionCheck = collisionCheck || strcmp(contacts->contact(i).collision1().c_str(), "collision");
-
+	collisionCheck = collisionCheck || strcmp(contacts->contact(i).collision1().c_str(), "collision");
+#endif
+	
 	if (collisionCheck)
 	  {
 	    rewardHistory = REWARD_WIN;
@@ -327,11 +334,11 @@ namespace gazebo
 
 		
     /*
-      / TODO - Increase or decrease the joint velocity based on whether the action is even or odd
+      /  - Increase or decrease the joint velocity based on whether the action is even or odd
       /
     */
 	
-    float velocity = actionSign * actionVelDelta; // TODO - Set joint velocity based on whether action is even or odd.
+    float velocity = actionSign * actionVelDelta; //  - Set joint velocity based on whether action is even or odd.
 
     if( velocity < VELOCITY_MIN )
       velocity = VELOCITY_MIN;
@@ -359,10 +366,10 @@ namespace gazebo
 #else
 	
     /*
-      / TODO - Increase or decrease the joint position based on whether the action is even or odd
+      / Increase or decrease the joint position based on whether the action is even or odd
       /
     */
-    float joint = actionSign * actionJointDelta; // TODO - Set joint position based on whether action is even or odd.
+    float joint = ref[action/2] + actionSign * actionJointDelta; //  - Set joint position based on whether action is even or odd.
 
     // limit the joint to the specified range
     if( joint < JOINT_MIN )
@@ -586,7 +593,7 @@ namespace gazebo
 	const float groundContact = 0.05f;
 		
 	/*
-	  / TODO - set appropriate Reward for robot hitting the ground.
+	  /  - set appropriate Reward for robot hitting the ground.
 	  /
 	*/
 	bool checkGroundContact = gripBBox.min.z <= groundContact;
@@ -603,7 +610,7 @@ namespace gazebo
 		
 		
 	/*
-	  / TODO - Issue an interim reward based on the distance to the object
+	  /  - Issue an interim reward based on the distance to the object
 	  /
 	*/ 
 		
