@@ -71,7 +71,7 @@
 // Lock base rotation DOF (Add dof in header file if off)
 #define LOCKBASE true
 
-#define GRIPPER_CONTACT_ONLY true
+#define GRIPPER_ONLY_CONTACT true
 
 namespace gazebo
 {
@@ -165,7 +165,7 @@ namespace gazebo
       /  - Create DQN Agent
       /
     */
-#ifdef LOCKBASE
+#if LOCKBASE
     int numActions = (DOF - 1) * 2;
 #else
     int numActions = DOF * 2;
@@ -271,17 +271,16 @@ namespace gazebo
 	*/
 	
 		
-	bool collisionCheck = strcmp(contacts->contact(i).collision1().c_str(), "gripper_link");
-#ifndef GRIPPER_CONTACT_ONLY
-	collisionCheck = collisionCheck || strcmp(contacts->contact(i).collision1().c_str(), "right_gripper");
-	collisionCheck = collisionCheck || strcmp(contacts->contact(i).collision1().c_str(), "middle_collision");
-	collisionCheck = collisionCheck || strcmp(contacts->contact(i).collision1().c_str(), "left_gripper");
-	collisionCheck = collisionCheck || strcmp(contacts->contact(i).collision1().c_str(), "collision2");
-	collisionCheck = collisionCheck || strcmp(contacts->contact(i).collision1().c_str(), "collision");
+	bool collisionCheck = strcmp(contacts->contact(i).collision1().c_str(), COLLISION_ITEM) == 0;
+#if GRIPPER_ONLY_CONTACT
+	collisionCheck = collisionCheck && (strcmp(contacts->contact(i).collision2().c_str(), COLLISION_POINT) == 0);
 #endif
 	
 	if (collisionCheck)
 	  {
+	    std::cout << "Collision between[" << contacts->contact(i).collision1()
+			    << "] and [" << contacts->contact(i).collision2() << "]\n";
+	    
 	    rewardHistory = REWARD_WIN;
 
 	    newReward  = true;
